@@ -48,32 +48,46 @@ jobs:
           dotnet-version: |
             8.0.x
 
-      - name: 发布 ${{ matrix.rid }}
-        run: dotnet publish src/DnsDefender.UI/DnsDefender.UI.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/publish/${{ matrix.rid }}
-
-      - name: 重命名 EXE 并打包发布产物
+      - name: 计算发布版本号
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
-          $rid = "${{ matrix.rid }}"
           $tagNoV = $tag.TrimStart('v','V')
           $parts = $tagNoV.Split('.')
+          while ($parts.Length -lt 4) {
+            $parts += '0'
+          }
+          $fileVersion = ($parts[0..3] -join '.')
+
           if ($parts.Length -ge 2) {
             $displayVersion = "{0}.{1}" -f $parts[0], $parts[1]
           } else {
             $displayVersion = $tagNoV
           }
+
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_VERSION=$tagNoV" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_FILE_VERSION=$fileVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "DISPLAY_VERSION=$displayVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: 发布 ${{ matrix.rid }}
+        run: dotnet publish src/DnsDefender.UI/DnsDefender.UI.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=${{ env.RELEASE_VERSION }} -p:FileVersion=${{ env.RELEASE_FILE_VERSION }} -p:AssemblyVersion=${{ env.RELEASE_FILE_VERSION }} -p:InformationalVersion=V${{ env.RELEASE_VERSION }} -p:IncludeSourceRevisionInInformationalVersion=false -o artifacts/publish/${{ matrix.rid }}
+
+      - name: 重命名 EXE 并打包发布产物
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
           $arch = if ($rid -eq 'win-x64') { 'x64' } elseif ($rid -eq 'win-x86') { 'x86' } else { $rid }
 
           $publishDir = "artifacts/publish/$rid"
           $sourceExe = Join-Path $publishDir "DnsDefender.UI.exe"
-          $targetExeName = "DNS解析溯源工具V$displayVersion-$arch.exe"
+          $targetExeName = "DNS解析溯源工具V${{ env.DISPLAY_VERSION }}-$arch.exe"
           $targetExe = Join-Path $publishDir $targetExeName
           if (Test-Path $sourceExe) {
             Move-Item -Path $sourceExe -Destination $targetExe -Force
           }
 
-          $zipName = "DnsDefender-$tag-$rid.zip"
+          $zipName = "DnsDefender-${{ env.RELEASE_TAG }}-$rid.zip"
           New-Item -ItemType Directory -Force -Path "artifacts/release" | Out-Null
 
           $filesToZip = Get-ChildItem -Path $publishDir -Recurse -File | Where-Object { $_.Extension -ne '.pdb' }
