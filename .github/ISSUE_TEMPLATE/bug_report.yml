@@ -1,0 +1,69 @@
+name: Bug 反馈
+description: 报告一个可以复现的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量提供可复现信息，便于快速定位。
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 简要说明发生了什么。
+      placeholder: 例如：启动采集后 UI 无数据更新
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 按步骤描述如何复现。
+      placeholder: |
+        1. 打开应用
+        2. 点击“开始记录”
+        3. 访问某域名
+        4. 观察到...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+      placeholder: 应该出现什么行为？
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      placeholder: 实际发生了什么？
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      placeholder: 例如 v3.13.2
+
+  - type: dropdown
+    id: arch
+    attributes:
+      label: 系统架构
+      options:
+        - win-x64
+        - win-x86
+        - 其他
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志/截图
+      description: 可粘贴关键日志或截图（注意脱敏）。
+      render: shell

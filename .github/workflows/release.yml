@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+
+      - name: 还原依赖
+        run: dotnet restore DnsDefender.sln
+
+      - name: 编译解决方案
+        run: dotnet build DnsDefender.sln -c Release --no-restore
+
+      - name: 运行测试
+        run: dotnet test tests/DnsDefender.Collector.Tests/DnsDefender.Collector.Tests.csproj -c Release --no-build --verbosity normal
+
+  publish:
+    runs-on: windows-latest
+    needs: build-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, win-x86]
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+
+      - name: 发布 ${{ matrix.rid }}
+        run: dotnet publish src/DnsDefender.UI/DnsDefender.UI.csproj -c Release -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/publish/${{ matrix.rid }}
+
+      - name: 打包发布产物
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $rid = "${{ matrix.rid }}"
+          $zipName = "DnsDefender-$tag-$rid.zip"
+          $source = "artifacts/publish/$rid/*"
+          New-Item -ItemType Directory -Force -Path "artifacts/release" | Out-Null
+          Compress-Archive -Path $source -DestinationPath "artifacts/release/$zipName" -Force
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.rid }}
+          path: artifacts/release/*.zip
+
+  release:
+    runs-on: ubuntu-latest
+    needs: publish
+    steps:
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 生成校验文件
+        run: |
+          find artifacts -name "*.zip" -type f -print0 | xargs -0 sha256sum > SHA256SUMS.txt
+
+      - name: 创建并上传 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: DnsDefender ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.zip
+            SHA256SUMS.txt
